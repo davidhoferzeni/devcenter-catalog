@@ -65,6 +65,39 @@ function SetupScheduledTasks {
     Write-Host "Done setting up scheduled tasks"
 }
 
+function WithRetry {
+    Param(
+        [Parameter(Position=0, Mandatory=$true)]
+        [scriptblock]$ScriptBlock,
+
+        [Parameter(Position=1, Mandatory=$false)]
+        [int]$Maximum = 5,
+
+        [Parameter(Position=2, Mandatory=$false)]
+        [int]$Delay = 100
+    )
+
+    $iterationCount = 0
+    $lastException = $null
+    do {
+        $iterationCount++
+        try {
+            Invoke-Command -Command $ScriptBlock
+            return
+        } catch {
+            $lastException = $_
+            Write-Error $_
+
+            # Sleep for a random amount of time with exponential backoff
+            $randomDouble = Get-Random -Minimum 0.0 -Maximum 1.0
+            $k = $randomDouble * ([Math]::Pow(2.0, $iterationCount) - 1.0)
+            Start-Sleep -Milliseconds ($k * $Delay)
+        }
+    } while ($iterationCount -lt $Maximum)
+
+    throw $lastException
+}
+
 function InstallPS7 {
     if (!(Get-Command pwsh -ErrorAction SilentlyContinue)) {
         Write-Host "Installing PowerShell 7"
